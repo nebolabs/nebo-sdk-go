@@ -1,6 +1,6 @@
 # Nebo Go SDK
 
-Official Go SDK for building [Nebo](https://nebo.bot) apps.
+Official Go SDK for building [Nebo](https://neboloop.com) apps.
 
 ## Install
 
@@ -111,4 +111,4 @@ view := nebo.NewView("dashboard", "My Dashboard").
 
 ## Documentation
 
-See [Creating Nebo Apps](https://developer.neboloop.com/docs/creating-apps) for the full guide.
+See [Creating Nebo Apps](https://neboloop.com/developers) for the full guide.
