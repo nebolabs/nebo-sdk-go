@@ -5,7 +5,7 @@ Official Go SDK for building [Nebo](https://neboloop.com) apps.
 ## Install
 
 ```bash
-go get github.com/nebolabs/nebo-sdk-go
+go get github.com/neboloop/nebo-sdk-go
 ```
 
 ## Quick Start
@@ -19,7 +19,7 @@ import (
     "fmt"
     "log"
 
-    nebo "github.com/nebolabs/nebo-sdk-go"
+    nebo "github.com/neboloop/nebo-sdk-go"
 )
 
 type Calculator struct{}

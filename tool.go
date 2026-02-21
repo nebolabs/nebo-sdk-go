@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 
-	pb "github.com/nebolabs/nebo-sdk-go/pb"
+	pb "github.com/neboloop/nebo-sdk-go/pb"
 )
 
 // ToolHandler is the interface for tool capability apps.

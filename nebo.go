@@ -14,11 +14,12 @@ package nebo
 import (
 	"fmt"
 	"net"
+	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
 
-	pb "github.com/nebolabs/nebo-sdk-go/pb"
+	pb "github.com/neboloop/nebo-sdk-go/pb"
 	"google.golang.org/grpc"
 )
 
@@ -29,6 +30,7 @@ type App struct {
 	server      *grpc.Server
 	onConfigure func(map[string]string)
 	hasHandlers bool
+	mux         *http.ServeMux
 }
 
 // New creates a new Nebo App. It reads NEBO_APP_* environment variables and
@@ -85,13 +87,25 @@ func (a *App) RegisterGateway(h GatewayHandler) {
 	a.hasHandlers = true
 }
 
-// RegisterUI registers a UIHandler capability.
-func (a *App) RegisterUI(h UIHandler) {
-	pb.RegisterUIServiceServer(a.server, &uiBridge{
-		handler:     h,
-		onConfigure: a.onConfigure,
-		env:         a.env,
-	})
+// HandleFunc registers an HTTP handler function for the given pattern.
+// Identical to http.ServeMux.HandleFunc — same name, same signature.
+// The app's HTTP handlers are called when the browser makes fetch() requests
+// to /apps/{id}/api/{path}.
+func (a *App) HandleFunc(pattern string, handler http.HandlerFunc) {
+	if a.mux == nil {
+		a.mux = http.NewServeMux()
+	}
+	a.mux.HandleFunc(pattern, handler)
+	a.hasHandlers = true
+}
+
+// Handle registers an HTTP handler for the given pattern.
+// Accepts any http.Handler — chi routers, gorilla/mux, middleware chains.
+func (a *App) Handle(pattern string, handler http.Handler) {
+	if a.mux == nil {
+		a.mux = http.NewServeMux()
+	}
+	a.mux.Handle(pattern, handler)
 	a.hasHandlers = true
 }
 
@@ -120,6 +134,15 @@ func (a *App) RegisterSchedule(h ScheduleHandler) {
 func (a *App) Run() error {
 	if !a.hasHandlers {
 		return ErrNoHandlers
+	}
+
+	// Register UI service if HandleFunc/Handle was called
+	if a.mux != nil {
+		pb.RegisterUIServiceServer(a.server, &uiBridge{
+			mux:         a.mux,
+			onConfigure: a.onConfigure,
+			env:         a.env,
+		})
 	}
 
 	// Remove stale socket from previous run

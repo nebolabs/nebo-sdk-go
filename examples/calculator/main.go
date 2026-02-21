@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"log"
 
-	nebo "github.com/nebolabs/nebo-sdk-go"
+	nebo "github.com/neboloop/nebo-sdk-go"
 )
 
 type Calculator struct{}

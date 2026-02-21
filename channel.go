@@ -3,15 +3,45 @@ package nebo
 import (
 	"context"
 
-	pb "github.com/nebolabs/nebo-sdk-go/pb"
+	pb "github.com/neboloop/nebo-sdk-go/pb"
 )
 
-// InboundMessage represents a message received from an external platform.
-type InboundMessage struct {
-	ChannelID string
-	UserID    string
-	Text      string
-	Metadata  string // JSON-encoded
+// MessageSender identifies who sent a message.
+type MessageSender struct {
+	Name  string
+	Role  string // relationship dynamic (Friend, COO, Mentor)
+	BotID string // NeboLoop bot UUID
+}
+
+// Attachment represents a file or media attachment.
+type Attachment struct {
+	Type     string // "image", "file", "audio", "video"
+	URL      string
+	Filename string
+	Size     int64 // bytes
+}
+
+// MessageAction represents an interactive element (button, keyboard row).
+type MessageAction struct {
+	Label      string
+	CallbackID string
+}
+
+// ChannelEnvelope is the v1 message envelope used for both inbound and outbound messages.
+type ChannelEnvelope struct {
+	MessageID    string
+	ChannelID    string
+	Sender       MessageSender
+	Text         string
+	Attachments  []Attachment
+	ReplyTo      string
+	Actions      []MessageAction
+	PlatformData []byte
+	Timestamp    string // RFC3339
+
+	// Legacy fields (inbound only)
+	UserID   string
+	Metadata string // JSON-encoded
 }
 
 // ChannelHandler is the interface for channel capability apps.
@@ -20,8 +50,8 @@ type ChannelHandler interface {
 	ID() string
 	Connect(ctx context.Context, config map[string]string) error
 	Disconnect(ctx context.Context) error
-	Send(ctx context.Context, channelID, text string) error
-	Receive(ctx context.Context) (<-chan InboundMessage, error)
+	Send(ctx context.Context, env ChannelEnvelope) (string, error)
+	Receive(ctx context.Context) (<-chan ChannelEnvelope, error)
 }
 
 // channelBridge adapts a ChannelHandler to the pb.ChannelServiceServer gRPC interface.
@@ -59,10 +89,40 @@ func (b *channelBridge) Disconnect(ctx context.Context, _ *pb.Empty) (*pb.Channe
 }
 
 func (b *channelBridge) Send(ctx context.Context, req *pb.ChannelSendRequest) (*pb.ChannelSendResponse, error) {
-	if err := b.handler.Send(ctx, req.ChannelId, req.Text); err != nil {
+	env := ChannelEnvelope{
+		ChannelID:    req.ChannelId,
+		Text:         req.Text,
+		MessageID:    req.MessageId,
+		ReplyTo:      req.ReplyTo,
+		PlatformData: req.PlatformData,
+	}
+	if req.Sender != nil {
+		env.Sender = MessageSender{
+			Name:  req.Sender.Name,
+			Role:  req.Sender.Role,
+			BotID: req.Sender.BotId,
+		}
+	}
+	for _, a := range req.Attachments {
+		env.Attachments = append(env.Attachments, Attachment{
+			Type:     a.Type,
+			URL:      a.Url,
+			Filename: a.Filename,
+			Size:     a.Size,
+		})
+	}
+	for _, a := range req.Actions {
+		env.Actions = append(env.Actions, MessageAction{
+			Label:      a.Label,
+			CallbackID: a.CallbackId,
+		})
+	}
+
+	messageID, err := b.handler.Send(ctx, env)
+	if err != nil {
 		return &pb.ChannelSendResponse{Error: err.Error()}, nil
 	}
-	return &pb.ChannelSendResponse{}, nil
+	return &pb.ChannelSendResponse{MessageId: messageID}, nil
 }
 
 func (b *channelBridge) Receive(_ *pb.Empty, stream pb.ChannelService_ReceiveServer) error {
@@ -76,12 +136,38 @@ func (b *channelBridge) Receive(_ *pb.Empty, stream pb.ChannelService_ReceiveSer
 			if !ok {
 				return nil
 			}
-			if err := stream.Send(&pb.InboundMessage{
-				ChannelId: msg.ChannelID,
-				UserId:    msg.UserID,
-				Text:      msg.Text,
-				Metadata:  msg.Metadata,
-			}); err != nil {
+			pbMsg := &pb.InboundMessage{
+				ChannelId:    msg.ChannelID,
+				UserId:       msg.UserID,
+				Text:         msg.Text,
+				Metadata:     msg.Metadata,
+				MessageId:    msg.MessageID,
+				ReplyTo:      msg.ReplyTo,
+				PlatformData: msg.PlatformData,
+				Timestamp:    msg.Timestamp,
+			}
+			if msg.Sender != (MessageSender{}) {
+				pbMsg.Sender = &pb.MessageSender{
+					Name:  msg.Sender.Name,
+					Role:  msg.Sender.Role,
+					BotId: msg.Sender.BotID,
+				}
+			}
+			for _, a := range msg.Attachments {
+				pbMsg.Attachments = append(pbMsg.Attachments, &pb.Attachment{
+					Type:     a.Type,
+					Url:      a.URL,
+					Filename: a.Filename,
+					Size:     a.Size,
+				})
+			}
+			for _, a := range msg.Actions {
+				pbMsg.Actions = append(pbMsg.Actions, &pb.MessageAction{
+					Label:      a.Label,
+					CallbackId: a.CallbackID,
+				})
+			}
+			if err := stream.Send(pbMsg); err != nil {
 				return err
 			}
 		case <-stream.Context().Done():

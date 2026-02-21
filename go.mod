@@ -1,4 +1,4 @@
-module github.com/nebolabs/nebo-sdk-go
+module github.com/neboloop/nebo-sdk-go
 
 go 1.23.0
 

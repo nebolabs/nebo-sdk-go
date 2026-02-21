@@ -3,7 +3,7 @@ package nebo
 import (
 	"context"
 
-	pb "github.com/nebolabs/nebo-sdk-go/pb"
+	pb "github.com/neboloop/nebo-sdk-go/pb"
 )
 
 // Schedule represents a single scheduled task.
