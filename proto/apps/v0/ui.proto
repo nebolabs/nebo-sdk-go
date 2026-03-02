@@ -37,3 +37,4 @@ message HttpResponse {
   map<string, string> headers = 2;     // Response headers
   bytes body = 3;                      // Response body
 }
+
